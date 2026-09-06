@@ -22,6 +22,32 @@
     @media(max-width:600px){.visual{height:auto;min-height:560px}.product-meta{max-width:72%}.product-meta h1{font-size:clamp(1.65rem,10vw,2.65rem)}.product-art{inset:28% 7% 15% 7%;align-items:center}.product-art img{width:min(72%,320px);height:72%}.quantity{top:54%}.swipe-hint{bottom:18px}}
     @media(max-width:430px){.visual{min-height:590px}.product-art{inset:31% 5% 17% 5%}.product-art img{width:min(68%,280px);height:68%}.quantity{top:56%}}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+    /* In-flow product layout: zoom enlarges content without clipping it. */
+    .workspace{grid-template-columns:minmax(0,1fr)}
+    .product-stage{width:100%;min-height:0}
+    .visual{height:auto;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 64px;gap:18px;padding:24px}
+    .product-meta{position:relative;inset:auto;max-width:none;grid-column:1;grid-row:1}
+    .product-meta h1{max-width:none;font-size:clamp(2rem,4vw,4rem);overflow-wrap:anywhere;line-height:1.1}
+    .product-art{position:relative;inset:auto;grid-column:1;grid-row:2;height:clamp(240px,45dvh,540px);min-width:0;display:block}
+    .product-art img{position:absolute;inset:0;display:block;width:100%;height:100%;max-height:100%;object-fit:contain;object-position:center}
+    .quantity{position:relative;inset:auto;transform:none;grid-column:2;grid-row:2;align-self:center}
+    .order-toggle{grid-column:2;grid-row:1;z-index:2500;position:relative;border:2px solid #c6a078;color:#e5c399;align-self:start;width:64px;height:64px}
+    .order-toggle svg{width:30px;height:30px}
+    .order-count{position:absolute;right:-5px;top:-7px;background:var(--gold);color:#171207;border-radius:20px;padding:1px 5px;font-size:.7rem}
+    .swipe-hint{position:relative;inset:auto;transform:none;grid-column:1/-1;justify-self:center;text-align:center}
+    .carousel{grid-template-columns:44px minmax(0,1fr) 44px;height:auto;min-height:126px}
+    .thumbs{min-width:0}
+    .session{min-width:0}.session small{overflow-wrap:anywhere}.topbar{height:auto;min-height:64px;gap:12px}.hamburger{flex-shrink:0}
+    .menu{visibility:hidden;max-height:calc(100dvh - 90px);overflow:auto}.menu.open{visibility:visible}
+    #orderDialog{width:min(460px,calc(100% - 24px));max-height:calc(100dvh - 24px);overflow:auto;margin:12px 12px 12px auto}
+    #orderDialog .order-panel{position:static;width:100%;min-height:0;margin:0;border:0;box-shadow:none;padding:20px}
+    .order-heading{display:flex;align-items:start;justify-content:space-between;gap:12px}.order-heading h2{font-size:clamp(1.5rem,5vw,2.25rem);overflow-wrap:anywhere}.order-heading button{flex-shrink:0}
+    .order-lines{max-height:none;overflow:visible}
+    .line-item{grid-template-columns:40px minmax(0,1fr) auto}.line-item img{width:40px}.line-item strong{overflow-wrap:anywhere}
+    .total{gap:12px;flex-wrap:wrap}
+    @media(max-width:600px){.visual{padding:16px;gap:12px;grid-template-columns:minmax(0,1fr) 52px}.order-toggle{width:52px;height:52px}.product-meta h1{font-size:clamp(1.65rem,7vw,2.65rem)}.carousel{padding:10px 6px;gap:5px}.arrow{width:44px;height:44px}}
+
   </style>
 </head>
 <body>
@@ -62,6 +88,7 @@
       <section class="product-stage" aria-label="Product selection">
         <div class="visual" id="swipeArea">
           <div class="visual-bg"></div>
+          <button class="icon-btn order-toggle" id="orderToggle" type="button" aria-label="Open current order" aria-haspopup="dialog" aria-controls="orderDialog" aria-expanded="false" title="Open current order"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 5h16v23l-4-2-4 2-4-2-4 2V5Z"/><path d="M12 11h8m-8 6h8m-8 5h5"/></svg><span class="order-count" id="orderCount" aria-hidden="true">0</span></button>
           <div class="product-meta"><p class="eyebrow" id="categoryLabel">Soft drink</p><h1 id="productName">Sparkling Cola</h1><span class="price" id="productPrice">$2.50</span><span class="stock" id="productStock">24 available</span></div>
           <div class="product-art" id="productArt" aria-hidden="true"></div>
           <div class="quantity" aria-label="Quantity controls">
@@ -78,16 +105,17 @@
         </div>
       </section>
 
-      <aside class="order-panel" aria-label="Current order">
-        <h2>Current order</h2><span class="order-number" id="orderNumber"></span>
+
+    </div>
+  </main>
+
+  <dialog id="orderDialog" aria-labelledby="orderTitle">      <aside class="order-panel" aria-label="Current order">
+        <div class="order-heading"><h2 id="orderTitle">Current order</h2><button class="icon-btn" id="closeOrder" type="button" aria-label="Close current order" title="Close current order">×</button></div><span class="order-number" id="orderNumber"></span>
         <div class="order-lines" id="orderLines"><p class="empty">Use + to add a product.</p></div>
         <div class="total"><span>Total</span><strong id="orderTotal">$0.00</strong></div>
         <button class="primary review" id="reviewOrder" type="button" disabled>Review order</button>
         <p class="sync-note"><span>↻</span><span>Submission will record the sale and reduce inventory as one controlled transaction.</span></p>
-      </aside>
-    </div>
-  </main>
-
+      </aside></dialog>
   <dialog id="reviewDialog"><div class="modal" id="reviewContent"></div></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -106,9 +134,13 @@
     function visible(){return state.filter==='all'?products:products.filter(p=>p.category===state.filter)}
     function current(){const list=visible();return list[state.index%list.length]}
     function renderProduct(direction=0){const p=current(),el=$('productArt');if(direction){el.style.transform=`translateX(${direction*24}px)`;el.style.opacity='.3';setTimeout(()=>{el.style.transform='';el.style.opacity='1'},120)}$('categoryLabel').textContent=p.label;$('productName').textContent=p.name;$('productPrice').textContent=money(p.price);$('productStock').textContent=`${p.stock-(state.cart.get(p.id)||0)} available`;$('quantity').textContent=state.cart.get(p.id)||0;$('increase').disabled=(state.cart.get(p.id)||0)>=p.stock;$('increase').setAttribute('aria-label',`Add one ${p.name}`);$('decrease').setAttribute('aria-label',`Remove one ${p.name}`);el.innerHTML=art(p);renderThumbs()}
-    function renderThumbs(){const list=visible();$('thumbs').innerHTML=list.map((p,i)=>`<button class="thumb ${i===state.index?'active':''}" data-index="${i}" type="button" aria-label="Select ${p.name}">${art(p)}<span>${p.name}</span></button>`).join('');document.querySelector('.thumb.active')?.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'})}
+    function renderThumbs(){const list=visible();$('thumbs').innerHTML=list.map((p,i)=>`<button class="thumb ${i===state.index?'active':''}" data-index="${i}" type="button" aria-label="Select ${p.name}">${art(p)}<span>${p.name}</span></button>`).join('');const active=document.querySelector('.thumb.active');if(active)$('thumbs').scrollTo({left:active.offsetLeft-$('thumbs').offsetLeft-($('thumbs').clientWidth-active.clientWidth)/2,behavior:'smooth'})}
     function changeQty(delta){const p=current(),qty=Math.max(0,Math.min(p.stock,(state.cart.get(p.id)||0)+delta));qty?state.cart.set(p.id,qty):state.cart.delete(p.id);renderProduct();renderCart()}
-    function renderCart(){const items=[...state.cart].map(([id,qty])=>({p:products.find(x=>x.id===id),qty}));$('orderLines').innerHTML=items.length?items.map(({p,qty})=>`<div class="line-item"><img src="${p.image}" alt=""><div><strong>${p.name}</strong><small>${qty} × ${money(p.price)}</small></div><div><strong>${money(qty*p.price)}</strong><button data-remove="${p.id}" aria-label="Remove ${p.name}">Remove</button></div></div>`).join(''):'<p class="empty">Use + to add a product.</p>';const total=items.reduce((sum,{p,qty})=>sum+p.price*qty,0);$('orderTotal').textContent=money(total);$('reviewOrder').disabled=!items.length}
+    function renderCart(){const items=[...state.cart].map(([id,qty])=>({p:products.find(x=>x.id===id),qty}));$('orderLines').innerHTML=items.length?items.map(({p,qty})=>`<div class="line-item"><img src="${p.image}" alt=""><div><strong>${p.name}</strong><small>${qty} × ${money(p.price)}</small></div><div><strong>${money(qty*p.price)}</strong><button data-remove="${p.id}" aria-label="Remove ${p.name}">Remove</button></div></div>`).join(''):'<p class="empty">Use + to add a product.</p>';const total=items.reduce((sum,{p,qty})=>sum+p.price*qty,0);$('orderTotal').textContent=money(total);$('reviewOrder').disabled=!items.length;const count=items.reduce((n,item)=>n+item.qty,0);$('orderCount').textContent=count;$('orderToggle').setAttribute('aria-label',`Open current order, ${count} items`)}
+    $('orderToggle').addEventListener('click',()=>{$('mainMenu').classList.remove('open');$('menuButton').setAttribute('aria-expanded','false');$('orderDialog').showModal();$('orderToggle').setAttribute('aria-expanded','true')});
+    $('closeOrder').addEventListener('click',()=>$('orderDialog').close());
+    $('orderDialog').addEventListener('close',()=>{$('orderToggle').setAttribute('aria-expanded','false');$('orderToggle').focus({preventScroll:true})});
+    $('orderDialog').addEventListener('click',e=>{const r=$('orderDialog').getBoundingClientRect();if(e.target===$('orderDialog')&&(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom))$('orderDialog').close()});
     function move(delta){const list=visible();state.index=(state.index+delta+list.length)%list.length;renderProduct(delta)}
     function toast(message){$('toast').textContent=message;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2200)}
     $('authForm').addEventListener('submit',e=>{e.preventDefault();const email=$('staffEmail').value.trim(),code=$('authCode').value;if(code.length<6||!$('consent').checked){$('authError').textContent='Authorization and consent are required.';return}sessionStorage.setItem('marxiaStaffSession',JSON.stringify({email,consentedAt:new Date().toISOString()}));$('staffIdentity').textContent=email;$('authView').classList.add('hidden');$('appView').classList.remove('hidden');renderProduct();renderCart()});
