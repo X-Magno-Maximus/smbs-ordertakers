@@ -48,6 +48,20 @@
     .total{gap:12px;flex-wrap:wrap}
     @media(max-width:600px){.visual{padding:16px;gap:12px;grid-template-columns:minmax(0,1fr) 52px}.order-toggle{width:52px;height:52px}.product-meta h1{font-size:clamp(1.65rem,7vw,2.65rem)}.carousel{padding:10px 6px;gap:5px}.arrow{width:44px;height:44px}}
 
+
+    .hand-preference{border:1px solid var(--line);border-radius:12px;margin:10px 0;padding:10px;min-width:0}
+    .hand-preference legend{color:var(--muted);font-size:.8rem}
+    .hand-options{display:flex;flex-wrap:wrap;gap:8px}
+    .hand-options label{display:flex;align-items:center;gap:6px;flex:1;min-height:44px;color:var(--ink);cursor:pointer}
+    .hand-options input{width:20px;min-height:20px;margin:0;accent-color:var(--gold);flex-shrink:0}
+    body[data-hand="left"] .topbar{flex-direction:row-reverse}
+    body[data-hand="left"] .visual{grid-template-columns:64px minmax(0,1fr)}
+    body[data-hand="left"] .product-meta,body[data-hand="left"] .product-art{grid-column:2}
+    body[data-hand="left"] .order-toggle,body[data-hand="left"] .quantity{grid-column:1}
+    body[data-hand="left"] .menu{left:18px;right:auto;transform:translateX(calc(-100% - 36px))}
+    body[data-hand="left"] .menu.open{transform:none}
+    body[data-hand="left"] #orderDialog{margin:12px auto 12px 12px}
+    @media(max-width:600px){body[data-hand="left"] .visual{grid-template-columns:52px minmax(0,1fr)}}
   </style>
 </head>
 <body>
@@ -81,6 +95,10 @@
         <button class="save-contact" id="saveContact" type="button">Save consumer details</button>
       </div>
       <hr>
+      <fieldset class="hand-preference"><legend>Control placement</legend><div class="hand-options">
+        <label title="Place controls on the left"><input type="radio" name="handPreference" value="left">Left-handed</label>
+        <label title="Place controls on the right"><input type="radio" name="handPreference" value="right" checked>Right-handed</label>
+      </div></fieldset>
       <button id="lockSession" type="button">Lock staff session</button>
     </nav>
 
@@ -151,6 +169,26 @@
     $('saveContact').addEventListener('click',()=>{state.contact={email:$('consumerEmail').value.trim(),whatsapp:$('consumerWhatsApp').value.trim()};toast('Consumer details saved to this order')});
     $('reviewOrder').addEventListener('click',()=>{const items=[...state.cart].map(([id,qty])=>({p:products.find(x=>x.id===id),qty})),total=items.reduce((s,{p,qty})=>s+p.price*qty,0);$('reviewContent').innerHTML=`<h2>Review before submitting</h2><p class="auth-copy">Confirm the products and quantities. This action will record the sale and reduce inventory.</p><div class="review-list">${items.map(({p,qty})=>`<div class="review-row"><span>${qty} × ${p.name}</span><strong>${money(qty*p.price)}</strong></div>`).join('')}</div><div class="total"><span>Order total</span><strong>${money(total)}</strong></div><div class="modal-actions"><button class="secondary" id="cancelReview">Go back</button><button class="primary" id="submitOrder">Submit order</button></div>`;$('reviewDialog').showModal();$('cancelReview').onclick=()=>$('reviewDialog').close();$('submitOrder').onclick=submitOrder});
     function submitOrder(){const lines=[...state.cart].map(([id,quantity])=>({productId:id,quantity,unitPrice:products.find(p=>p.id===id).price}));const order={id:$('orderNumber').textContent,lines,consumer:state.contact,createdAt:new Date().toISOString(),status:'submitted'};products.forEach(p=>p.stock-=state.cart.get(p.id)||0);localStorage.setItem('marxiaLastOrder',JSON.stringify(order));window.dispatchEvent(new CustomEvent('marxia:order-submitted',{detail:order}));$('reviewContent').innerHTML='<div class="success"><div class="success-mark">✓</div><h2>Order submitted</h2><p class="auth-copy">The sale was recorded and inventory quantities were reduced.</p><button class="primary full" id="newOrder">Start new order</button></div>';$('newOrder').onclick=()=>{state.cart.clear();state.contact={email:'',whatsapp:''};$('consumerEmail').value='';$('consumerWhatsApp').value='';$('orderNumber').textContent=`Order #${String(Date.now()).slice(-6)}`;$('reviewDialog').close();renderProduct();renderCart()}}
+
+    const handPreferenceKey='marxiaOrderHandPreference';
+    function applyHandPreference(value){
+      const hand=value==='left'?'left':'right';
+      document.body.dataset.hand=hand;
+      document.querySelectorAll('input[name="handPreference"]').forEach(input=>{input.checked=input.value===hand});
+    }
+    function restoreHandPreference(){
+      let hand='right';
+      try{hand=localStorage.getItem(handPreferenceKey)||'right'}catch{}
+      applyHandPreference(hand);
+    }
+    document.querySelectorAll('input[name="handPreference"]').forEach(input=>input.addEventListener('change',()=>{
+      if(!input.checked)return;
+      applyHandPreference(input.value);
+      try{localStorage.setItem(handPreferenceKey,input.value)}catch{toast('Control placement changed for this visit; browser storage is unavailable')}
+    }));
+    window.addEventListener('storage',event=>{if(event.key===handPreferenceKey||event.key===null)restoreHandPreference()});
+    restoreHandPreference();
+
     $('lockSession').addEventListener('click',()=>{sessionStorage.removeItem('marxiaStaffSession');location.reload()});
     $('orderNumber').textContent=`Order #${String(Date.now()).slice(-6)}`;
     const active=sessionStorage.getItem('marxiaStaffSession');if(active){try{const s=JSON.parse(active);$('staffIdentity').textContent=s.email;$('authView').classList.add('hidden');$('appView').classList.remove('hidden');renderProduct();renderCart()}catch{sessionStorage.removeItem('marxiaStaffSession')}}
