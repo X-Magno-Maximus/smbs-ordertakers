@@ -131,11 +131,7 @@
       <button data-category="soft-drink">Soft drinks</button>
       <button data-category="coffee">Coffee</button>
       <hr>
-      <div class="menu-contact">
-        <label>Consumer email <input id="consumerEmail" type="email" inputmode="email" placeholder="Optional"></label>
-        <label>Consumer WhatsApp <input id="consumerWhatsApp" type="tel" inputmode="tel" placeholder="Optional"></label>
-        <button class="save-contact" id="saveContact" type="button">Save consumer details</button>
-      </div>
+
       <hr>
       <fieldset class="hand-preference"><legend>Control placement</legend><div class="hand-options">
         <label title="Place controls on the left"><input type="radio" name="handPreference" value="left">Left-handed</label>
@@ -171,9 +167,24 @@
         <div class="session"><span class="live-dot"></span><div><strong>Order station active</strong><small id="staffIdentity">Authorized staff session</small></div></div>
         <div class="order-heading"><h2 id="orderTitle">Current order</h2><button class="icon-btn" id="closeOrder" type="button" aria-label="Close current order" title="Close current order">×</button></div><span class="order-number" id="orderNumber"></span>
         <div class="order-lines" id="orderLines"><p class="empty">Use + to add a product.</p></div>
+
+        <button class="secondary full" id="addClient" type="button" aria-expanded="false" aria-controls="clientFields">+ Add Client</button>
+        <div id="clientFields" hidden>
+          <label class="field"><span>Client name</span><input id="clientName" maxlength="120" autocomplete="name"></label>
+                <div class="menu-contact">
+        <label>Consumer email <input id="consumerEmail" type="email" inputmode="email" placeholder="Optional"></label>
+        <label>Consumer WhatsApp <input id="consumerWhatsApp" type="tel" inputmode="tel" placeholder="Optional"></label>
+        <button class="save-contact" id="saveContact" type="button">Save consumer details</button>
+      </div>
+        </div>
+        <label class="field"><span>VAT %</span><input id="vatRate" type="number" min="0" max="100" step="0.01" inputmode="decimal"></label>
+        <label class="field"><span>Reference</span><input id="orderReference" maxlength="200"></label>
+        <p>Subtotal <strong id="orderSubtotal">$0.00</strong> · VAT <strong id="orderVat">$0.00</strong></p>
+        <p id="draftStatus" role="status"></p>
         <div class="total"><span>Total</span><strong id="orderTotal">$0.00</strong></div>
         <button class="primary review" id="reviewOrder" type="button" disabled>Review order</button>
-        <p class="sync-note"><span>↻</span><span>Submission will record the sale and reduce inventory as one controlled transaction.</span></p>
+        <button class="primary full" id="paidOrder" type="button" disabled style="margin-top:12px">Paid</button>
+<p class="sync-note">Paid records staff confirmation on this device; it does not charge a payment method.</p>
       </aside></dialog>
   <dialog id="reviewDialog"><div class="modal" id="reviewContent"></div></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -195,22 +206,107 @@
     function renderProduct(direction=0){const p=current(),el=$('productArt');if(direction){el.style.transform=`translateX(${direction*24}px)`;el.style.opacity='.3';setTimeout(()=>{el.style.transform='';el.style.opacity='1'},120)}$('categoryLabel').textContent=p.label;$('productName').textContent=p.name;$('productPrice').textContent=money(p.price);$('productStock').textContent=`${p.stock-(state.cart.get(p.id)||0)} available`;$('quantity').textContent=state.cart.get(p.id)||0;$('increase').disabled=(state.cart.get(p.id)||0)>=p.stock;$('increase').setAttribute('aria-label',`Add one ${p.name}`);$('decrease').setAttribute('aria-label',`Remove one ${p.name}`);el.innerHTML=art(p);renderThumbs()}
     function renderThumbs(){const list=visible();$('thumbs').innerHTML=list.map((p,i)=>`<button class="thumb ${i===state.index?'active':''}" data-index="${i}" type="button" aria-label="Select ${p.name}">${art(p)}<span>${p.name}</span></button>`).join('');const active=document.querySelector('.thumb.active');if(active)$('thumbs').scrollTo({left:active.offsetLeft-$('thumbs').offsetLeft-($('thumbs').clientWidth-active.clientWidth)/2,behavior:'smooth'})}
     function changeQty(delta){const p=current(),qty=Math.max(0,Math.min(p.stock,(state.cart.get(p.id)||0)+delta));qty?state.cart.set(p.id,qty):state.cart.delete(p.id);renderProduct();renderCart()}
-    function renderCart(){const items=[...state.cart].map(([id,qty])=>({p:products.find(x=>x.id===id),qty}));$('orderLines').innerHTML=items.length?items.map(({p,qty})=>`<div class="line-item"><img src="${p.image}" alt=""><div><strong>${p.name}</strong><small>${qty} × ${money(p.price)}</small></div><div><strong>${money(qty*p.price)}</strong><button data-remove="${p.id}" aria-label="Remove ${p.name}">Remove</button></div></div>`).join(''):'<p class="empty">Use + to add a product.</p>';const total=items.reduce((sum,{p,qty})=>sum+p.price*qty,0);$('orderTotal').textContent=money(total);$('reviewOrder').disabled=!items.length;const count=items.reduce((n,item)=>n+item.qty,0);$('orderCount').textContent=count;$('orderToggle').setAttribute('aria-label',`Open current order, ${count} items`)}
+    function renderCart(){const items=[...state.cart].map(([id,qty])=>({p:products.find(x=>x.id===id),qty}));$('orderLines').innerHTML=items.length?items.map(({p,qty})=>`<div class="line-item"><img src="${p.image}" alt=""><div><strong>${p.name}</strong><small>${qty} × ${money(p.price)}</small></div><div><strong>${money(qty*p.price)}</strong><button data-remove="${p.id}" aria-label="Remove ${p.name}">Remove</button></div></div>`).join(''):'<p class="empty">Use + to add a product.</p>';const total=items.reduce((sum,{p,qty})=>sum+p.price*qty,0);$('orderTotal').textContent=money(orderAmounts().total/100);$('orderSubtotal').textContent=money(orderAmounts().subtotal/100);$('orderVat').textContent=money(orderAmounts().vat/100);$('paidOrder').disabled=!items.length;$('reviewOrder').disabled=!items.length;const count=items.reduce((n,item)=>n+item.qty,0);$('orderCount').textContent=count;$('orderToggle').setAttribute('aria-label',`Open current order, ${count} items`);saveDraft()}
     $('orderToggle').addEventListener('click',()=>{$('mainMenu').classList.remove('open');$('menuButton').setAttribute('aria-expanded','false');$('orderDialog').showModal();$('orderToggle').setAttribute('aria-expanded','true')});
     $('closeOrder').addEventListener('click',()=>$('orderDialog').close());
     $('orderDialog').addEventListener('close',()=>{$('orderToggle').setAttribute('aria-expanded','false');$('orderToggle').focus({preventScroll:true})});
     $('orderDialog').addEventListener('click',e=>{const r=$('orderDialog').getBoundingClientRect();if(e.target===$('orderDialog')&&(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom))$('orderDialog').close()});
     function move(delta){const list=visible();state.index=(state.index+delta+list.length)%list.length;renderProduct(delta)}
     function toast(message){$('toast').textContent=message;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2200)}
-    $('authForm').addEventListener('submit',e=>{e.preventDefault();const email=$('staffEmail').value.trim(),code=$('authCode').value;if(code.length<6||!$('consent').checked){$('authError').textContent='Authorization and consent are required.';return}sessionStorage.setItem('marxiaStaffSession',JSON.stringify({email,consentedAt:new Date().toISOString()}));$('staffIdentity').textContent=email;$('authView').classList.add('hidden');$('appView').classList.remove('hidden');renderProduct();renderCart()});
+    $('authForm').addEventListener('submit',e=>{e.preventDefault();const email=$('staffEmail').value.trim(),code=$('authCode').value;if(code.length<6||!$('consent').checked){$('authError').textContent='Authorization and consent are required.';return}sessionStorage.setItem('marxiaStaffSession',JSON.stringify({email,consentedAt:new Date().toISOString()}));$('staffIdentity').textContent=email;restoreDraft(email);$('authView').classList.add('hidden');$('appView').classList.remove('hidden');renderProduct();renderCart()});
     $('menuButton').addEventListener('click',()=>{const open=$('mainMenu').classList.toggle('open');$('menuButton').setAttribute('aria-expanded',open)});document.addEventListener('click',e=>{if(!$('mainMenu').contains(e.target)&&!$('menuButton').contains(e.target)){$('mainMenu').classList.remove('open');$('menuButton').setAttribute('aria-expanded','false')}});
     document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('mainMenu').classList.contains('open')){$('mainMenu').classList.remove('open');$('menuButton').setAttribute('aria-expanded','false');$('menuButton').focus()}});
     $('mainMenu').addEventListener('click',e=>{const button=e.target.closest('[data-category]');if(!button)return;state.filter=button.dataset.category;state.index=0;document.querySelectorAll('[data-category]').forEach(x=>x.classList.toggle('active',x===button));renderProduct();$('mainMenu').classList.remove('open');$('menuButton').setAttribute('aria-expanded','false')});
     $('increase').addEventListener('click',()=>changeQty(1));$('decrease').addEventListener('click',()=>changeQty(-1));$('previous').addEventListener('click',()=>move(-1));$('next').addEventListener('click',()=>move(1));$('thumbs').addEventListener('click',e=>{const b=e.target.closest('[data-index]');if(b){state.index=Number(b.dataset.index);renderProduct()}});$('orderLines').addEventListener('click',e=>{const b=e.target.closest('[data-remove]');if(b){state.cart.delete(b.dataset.remove);renderProduct();renderCart()}});
     let startX=0;$('swipeArea').addEventListener('pointerdown',e=>startX=e.clientX);$('swipeArea').addEventListener('pointerup',e=>{const d=e.clientX-startX;if(Math.abs(d)>48)move(d<0?1:-1)});
-    $('saveContact').addEventListener('click',()=>{state.contact={email:$('consumerEmail').value.trim(),whatsapp:$('consumerWhatsApp').value.trim()};toast('Consumer details saved to this order')});
-    $('reviewOrder').addEventListener('click',()=>{const items=[...state.cart].map(([id,qty])=>({p:products.find(x=>x.id===id),qty})),total=items.reduce((s,{p,qty})=>s+p.price*qty,0);$('reviewContent').innerHTML=`<h2>Review before submitting</h2><p class="auth-copy">Confirm the products and quantities. This action will record the sale and reduce inventory.</p><div class="review-list">${items.map(({p,qty})=>`<div class="review-row"><span>${qty} × ${p.name}</span><strong>${money(qty*p.price)}</strong></div>`).join('')}</div><div class="total"><span>Order total</span><strong>${money(total)}</strong></div><div class="modal-actions"><button class="secondary" id="cancelReview">Go back</button><button class="primary" id="submitOrder">Submit order</button></div>`;$('reviewDialog').showModal();$('cancelReview').onclick=()=>$('reviewDialog').close();$('submitOrder').onclick=submitOrder});
-    function submitOrder(){const lines=[...state.cart].map(([id,quantity])=>({productId:id,quantity,unitPrice:products.find(p=>p.id===id).price}));const order={id:$('orderNumber').textContent,lines,consumer:state.contact,createdAt:new Date().toISOString(),status:'submitted'};products.forEach(p=>p.stock-=state.cart.get(p.id)||0);localStorage.setItem('marxiaLastOrder',JSON.stringify(order));window.dispatchEvent(new CustomEvent('marxia:order-submitted',{detail:order}));$('reviewContent').innerHTML='<div class="success"><div class="success-mark">✓</div><h2>Order submitted</h2><p class="auth-copy">The sale was recorded and inventory quantities were reduced.</p><button class="primary full" id="newOrder">Start new order</button></div>';$('newOrder').onclick=()=>{state.cart.clear();state.contact={email:'',whatsapp:''};$('consumerEmail').value='';$('consumerWhatsApp').value='';$('orderNumber').textContent=`Order #${String(Date.now()).slice(-6)}`;$('reviewDialog').close();renderProduct();renderCart()}}
+
+    const draftPrefix='marxiaUnpaidOrder:v1:';
+    let draftKey=null, draftRevision=null, cacheConflict=false;
+    function orderAmounts(){
+      const subtotal=[...state.cart].reduce((sum,[id,qty])=>sum+Math.round(products.find(p=>p.id===id).price*100)*qty,0);
+      const rate=Number($('vatRate').value)||0;
+      const vat=Math.round(subtotal*rate/100);
+      return {subtotal,vat,total:subtotal+vat};
+    }
+    function draftData(){
+      return {version:1,id:$('orderNumber').textContent,lines:[...state.cart],vat:$('vatRate').value,reference:$('orderReference').value,client:{name:$('clientName').value,email:$('consumerEmail').value,whatsapp:$('consumerWhatsApp').value}};
+    }
+    function saveDraft(){
+      if(!draftKey||cacheConflict)return false;
+      try{
+        const previous=localStorage.getItem(draftKey);
+        if(previous!==draftRevision){cacheConflict=true;throw Error('conflict')}
+        const value=JSON.stringify(draftData());
+        localStorage.setItem(draftKey,value);draftRevision=value;
+        $('draftStatus').textContent='Unpaid order saved on this device.';
+        return true;
+      }catch{
+        $('draftStatus').textContent=cacheConflict?'This order changed in another tab. Reload before editing or marking paid.':'Browser storage unavailable. Keep this page open; the order is not saved.';
+        return false;
+      }
+    }
+    function restoreDraft(email){
+      draftKey=draftPrefix+encodeURIComponent(email.trim().toLowerCase());
+      try{
+        draftRevision=localStorage.getItem(draftKey);
+        if(!draftRevision)return;
+        const d=JSON.parse(draftRevision);
+        if(d.version!==1||!Array.isArray(d.lines)||!d.lines.every(([id,q])=>products.some(p=>p.id===id)&&Number.isInteger(q)&&q>0))throw Error('Invalid draft');
+        state.cart=new Map(d.lines);
+        $('orderNumber').textContent=String(d.id);
+        $('vatRate').value=d.vat??'';
+        $('orderReference').value=d.reference??'';
+        $('clientName').value=d.client?.name??'';
+        $('consumerEmail').value=d.client?.email??'';
+        $('consumerWhatsApp').value=d.client?.whatsapp??'';
+      }catch{
+        cacheConflict=true;
+        $('draftStatus').textContent='Saved order could not be restored. Its stored copy has been preserved.';
+      }
+    }
+    function validOrder(){
+      return !cacheConflict&&state.cart.size>0&&['vatRate','consumerEmail','clientName','orderReference'].every(id=>$(id).reportValidity());
+    }
+    $('addClient').addEventListener('click',()=>{
+      const open=$('clientFields').hidden;
+      $('clientFields').hidden=!open;
+      $('addClient').setAttribute('aria-expanded',String(open));
+      if(open)$('clientName').focus();
+    });
+    ['vatRate','orderReference','clientName','consumerEmail','consumerWhatsApp'].forEach(id=>$(id).addEventListener('input',()=>renderCart()));
+    $('saveContact').addEventListener('click',()=>{if($('consumerEmail').reportValidity()&&saveDraft())toast('Client saved to this order')});
+    function showOrderReview(paying){
+      if(!validOrder())return;
+      const amounts=orderAmounts();
+      $('reviewContent').innerHTML='<h2></h2><div class="review-list"></div><p class="review-summary"></p><div class="modal-actions"><button class="secondary" id="cancelReview">Go back</button><button class="primary" id="confirmReview"></button></div>';
+      $('reviewContent').querySelector('h2').textContent=paying?'Confirm payment received':'Review current order';
+      const list=$('reviewContent').querySelector('.review-list');
+      [...state.cart].forEach(([id,q])=>{const row=document.createElement('div');row.className='review-row';row.textContent=q+' × '+products.find(p=>p.id===id).name;list.append(row)});
+      $('reviewContent').querySelector('.review-summary').textContent='Subtotal '+money(amounts.subtotal/100)+' · VAT '+money(amounts.vat/100)+' · Total '+money(amounts.total/100)+(paying?' — Confirm only after payment has been received.':'');
+      $('confirmReview').textContent=paying?'Confirm paid':'Keep unpaid order';
+      $('reviewDialog').showModal();
+      $('cancelReview').onclick=()=>$('reviewDialog').close();
+      $('confirmReview').onclick=paying?markPaid:()=>$('reviewDialog').close();
+    }
+    $('reviewOrder').addEventListener('click',()=>showOrderReview(false));
+    $('paidOrder').addEventListener('click',()=>showOrderReview(true));
+    function markPaid(){
+      if(!validOrder()||!saveDraft())return;
+      try{
+        localStorage.removeItem(draftKey);draftRevision=null;
+      }catch{$('draftStatus').textContent='Could not clear saved order. Order retained.';return}
+      state.cart.clear();
+      ['vatRate','orderReference','clientName','consumerEmail','consumerWhatsApp'].forEach(id=>$(id).value='');
+      state.contact={email:'',whatsapp:''};
+      $('orderNumber').textContent='Order #'+crypto.randomUUID();
+      $('clientFields').hidden=true;$('addClient').setAttribute('aria-expanded','false');
+      $('reviewDialog').close();
+      const key=draftKey;draftKey=null;renderProduct();renderCart();draftKey=key;
+      $('draftStatus').textContent='Marked paid. Saved order cleared.';
+    }
+    window.addEventListener('storage',event=>{
+      if(draftKey&&(event.key===draftKey||event.key===null)){cacheConflict=true;$('draftStatus').textContent='Order changed in another tab. Reload to use the latest saved order.'}
+    });
 
     const handPreferenceKey='marxiaOrderHandPreference';
     function applyHandPreference(value){
@@ -233,7 +329,7 @@
 
     $('lockSession').addEventListener('click',()=>{sessionStorage.removeItem('marxiaStaffSession');location.reload()});
     $('orderNumber').textContent=`Order #${String(Date.now()).slice(-6)}`;
-    const active=sessionStorage.getItem('marxiaStaffSession');if(active){try{const s=JSON.parse(active);$('staffIdentity').textContent=s.email;$('authView').classList.add('hidden');$('appView').classList.remove('hidden');renderProduct();renderCart()}catch{sessionStorage.removeItem('marxiaStaffSession')}}
+    const active=sessionStorage.getItem('marxiaStaffSession');if(active){try{const s=JSON.parse(active);$('staffIdentity').textContent=s.email;restoreDraft(s.email);$('authView').classList.add('hidden');$('appView').classList.remove('hidden');renderProduct();renderCart()}catch{sessionStorage.removeItem('marxiaStaffSession')}}
   </script>
 </body>
 </html>
