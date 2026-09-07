@@ -103,6 +103,7 @@
       body[data-hand="left"] .product-meta{grid-column:3}
       body[data-hand="left"] .product-art{grid-column:2}
     }
+.pending-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.pending-actions button{flex:1;padding:10px}#pendingOrders{display:grid;gap:8px;max-height:240px;overflow:auto}#pendingOrders button{text-align:left;padding:12px;overflow-wrap:anywhere}#pendingOrders button[aria-current="true"]{border-color:var(--gold);color:var(--gold2)}
   </style>
 </head>
 <body>
@@ -181,6 +182,9 @@
         <label class="field"><span>Reference</span><input id="orderReference" maxlength="200"></label>
         <p>Subtotal <strong id="orderSubtotal">$0.00</strong> · VAT <strong id="orderVat">$0.00</strong></p>
         <p id="draftStatus" role="status"></p>
+        <button class="secondary full" id="vatLock" type="button" aria-pressed="false">Lock VAT for new orders</button>
+        <div class="pending-actions"><button class="secondary" id="newPending" type="button">Save &amp; New Order</button><button class="secondary" id="addMore" type="button">Add more items</button></div>
+        <h3>Pending orders</h3><div id="pendingOrders" aria-label="Saved unpaid orders"></div>
         <div class="total"><span>Total</span><strong id="orderTotal">$0.00</strong></div>
         <button class="primary review" id="reviewOrder" type="button" disabled>Review order</button>
         <button class="primary full" id="paidOrder" type="button" disabled style="margin-top:12px">Paid</button>
@@ -231,39 +235,85 @@
     function draftData(){
       return {version:1,id:$('orderNumber').textContent,lines:[...state.cart],vat:$('vatRate').value,reference:$('orderReference').value,client:{name:$('clientName').value,email:$('consumerEmail').value,whatsapp:$('consumerWhatsApp').value}};
     }
-    function saveDraft(){
+
+    let pending={version:2,next:1,active:null,orders:[],vatLocked:false,vatDefault:''};
+    let loadingOrder=false;
+    function newDraft(){
+      return {version:1,id:'Order #'+pending.next++,lines:[],vat:pending.vatLocked?pending.vatDefault:'',reference:'',client:{name:'',email:'',whatsapp:''}};
+    }
+    function loadOrder(d){
+      loadingOrder=true;
+      state.cart=new Map(d.lines);$('orderNumber').textContent=d.id;
+      $('vatRate').value=d.vat??'';$('orderReference').value=d.reference??'';
+      $('clientName').value=d.client?.name??'';$('consumerEmail').value=d.client?.email??'';$('consumerWhatsApp').value=d.client?.whatsapp??'';
+      $('vatRate').readOnly=pending.vatLocked;
+      $('vatLock').textContent=pending.vatLocked?'Unlock VAT ('+pending.vatDefault+'%)':'Lock VAT for new orders';
+      $('vatLock').setAttribute('aria-pressed',String(pending.vatLocked));
+      renderProduct();renderCart();loadingOrder=false;renderPending();
+    }
+    function renderPending(){
+      const list=$('pendingOrders');list.replaceChildren();
+      const orders=pending.orders.filter(d=>d.lines.length);
+      if(!orders.length){list.textContent='No pending orders.';return}
+      orders.forEach(d=>{
+        const b=document.createElement('button');b.type='button';b.className='secondary';
+        b.textContent=d.id+' · Reference '+(d.reference||'not entered');
+        b.setAttribute('aria-current',String(d.id===pending.active));
+        b.onclick=()=>{if(!saveDraft())return;const before=JSON.stringify(pending);pending.active=d.id;if(!persistPending()){pending=JSON.parse(before);return}loadOrder(d)};
+        list.append(b);
+      });
+    }
+    function persistPending(){
       if(!draftKey||cacheConflict)return false;
       try{
-        const previous=localStorage.getItem(draftKey);
-        if(previous!==draftRevision){cacheConflict=true;throw Error('conflict')}
-        const value=JSON.stringify(draftData());
-        localStorage.setItem(draftKey,value);draftRevision=value;
-        $('draftStatus').textContent='Unpaid order saved on this device.';
-        return true;
-      }catch{
-        $('draftStatus').textContent=cacheConflict?'This order changed in another tab. Reload before editing or marking paid.':'Browser storage unavailable. Keep this page open; the order is not saved.';
-        return false;
-      }
+        if(localStorage.getItem(draftKey)!==draftRevision){cacheConflict=true;throw Error('conflict')}
+        const value=JSON.stringify(pending);localStorage.setItem(draftKey,value);draftRevision=value;
+        $('draftStatus').textContent='Pending orders saved on this device.';return true;
+      }catch{$('draftStatus').textContent=cacheConflict?'Orders changed in another tab. Reload before continuing.':'Storage unavailable. Keep this page open; changes are not saved.';return false}
+    }
+    function saveDraft(){
+      if(loadingOrder)return true;
+      if(!draftKey||cacheConflict)return false;
+      const d=draftData(),index=pending.orders.findIndex(x=>x.id===d.id);
+      if(index<0)pending.orders.push(d);else pending.orders[index]=d;
+      pending.active=d.id;
+      const ok=persistPending();renderPending();return ok;
     }
     function restoreDraft(email){
       draftKey=draftPrefix+encodeURIComponent(email.trim().toLowerCase());
       try{
         draftRevision=localStorage.getItem(draftKey);
-        if(!draftRevision)return;
-        const d=JSON.parse(draftRevision);
-        if(d.version!==1||!Array.isArray(d.lines)||!d.lines.every(([id,q])=>products.some(p=>p.id===id)&&Number.isInteger(q)&&q>0))throw Error('Invalid draft');
-        state.cart=new Map(d.lines);
-        $('orderNumber').textContent=String(d.id);
-        $('vatRate').value=d.vat??'';
-        $('orderReference').value=d.reference??'';
-        $('clientName').value=d.client?.name??'';
-        $('consumerEmail').value=d.client?.email??'';
-        $('consumerWhatsApp').value=d.client?.whatsapp??'';
-      }catch{
-        cacheConflict=true;
-        $('draftStatus').textContent='Saved order could not be restored. Its stored copy has been preserved.';
-      }
+        if(draftRevision){
+          const data=JSON.parse(draftRevision);
+          if(data.version===1){
+            const oldNumber=Number(String(data.id).replace('Order #',''));
+            pending={version:2,next:Number.isSafeInteger(oldNumber)?oldNumber+1:1,active:data.id,orders:[data],vatLocked:false,vatDefault:''};
+          }else if(data.version===2)pending=data;else throw Error('version');
+          if(!Array.isArray(pending.orders)||!pending.orders.every(d=>typeof d.id==='string'&&Array.isArray(d.lines)&&d.lines.every(line=>Array.isArray(line)&&products.some(p=>p.id===line[0])&&Number.isInteger(line[1])&&line[1]>0)))throw Error('invalid orders');
+        }
+        let active=pending.orders.find(d=>d.id===pending.active);
+        if(!active){active=newDraft();pending.orders.push(active);pending.active=active.id}
+        loadOrder(active);
+      }catch{cacheConflict=true;$('draftStatus').textContent='Saved orders could not be restored; stored data has been preserved.'}
     }
+    $('newPending').addEventListener('click',()=>{
+      if(state.cart.size&&!validOrder())return;
+      if(!saveDraft())return;
+      if(!state.cart.size){toast('Add products before starting another order');return}
+      const before=JSON.stringify(pending),d=newDraft();pending.orders.push(d);pending.active=d.id;
+      if(!persistPending()){pending=JSON.parse(before);return}loadOrder(d);
+    });
+    $('addMore').addEventListener('click',()=>{$('orderDialog').close();$('increase').focus({preventScroll:true})});
+    $('vatLock').addEventListener('click',()=>{
+      if(!pending.vatLocked&&($('vatRate').value===''||!$('vatRate').reportValidity())){toast('Enter a valid VAT percentage first');return}
+      if(!saveDraft())return;
+      const before=JSON.stringify(pending);pending.vatLocked=!pending.vatLocked;
+      if(pending.vatLocked)pending.vatDefault=$('vatRate').value;
+      if(!persistPending()){pending=JSON.parse(before);return}
+      $('vatRate').readOnly=pending.vatLocked;
+      $('vatLock').setAttribute('aria-pressed',String(pending.vatLocked));
+      $('vatLock').textContent=pending.vatLocked?'Unlock VAT ('+pending.vatDefault+'%)':'Lock VAT for new orders';
+    });
     function validOrder(){
       return !cacheConflict&&state.cart.size>0&&['vatRate','consumerEmail','clientName','orderReference'].every(id=>$(id).reportValidity());
     }
@@ -290,19 +340,17 @@
     }
     $('reviewOrder').addEventListener('click',()=>showOrderReview(false));
     $('paidOrder').addEventListener('click',()=>showOrderReview(true));
+
     function markPaid(){
       if(!validOrder()||!saveDraft())return;
-      try{
-        localStorage.removeItem(draftKey);draftRevision=null;
-      }catch{$('draftStatus').textContent='Could not clear saved order. Order retained.';return}
-      state.cart.clear();
-      ['vatRate','orderReference','clientName','consumerEmail','consumerWhatsApp'].forEach(id=>$(id).value='');
-      state.contact={email:'',whatsapp:''};
-      $('orderNumber').textContent='Order #'+crypto.randomUUID();
-      $('clientFields').hidden=true;$('addClient').setAttribute('aria-expanded','false');
-      $('reviewDialog').close();
-      const key=draftKey;draftKey=null;renderProduct();renderCart();draftKey=key;
-      $('draftStatus').textContent='Marked paid. Saved order cleared.';
+      const before=JSON.stringify(pending),paidId=pending.active;
+      pending.orders=pending.orders.filter(d=>d.id!==paidId);
+      const next=pending.orders.find(d=>d.lines.length)||pending.orders[0]||newDraft();
+      if(!pending.orders.includes(next))pending.orders.push(next);
+      pending.active=next.id;
+      if(!persistPending()){pending=JSON.parse(before);return}
+      $('reviewDialog').close();loadOrder(next);
+      $('draftStatus').textContent=paidId+' marked paid and removed. Other pending orders retained.';
     }
     window.addEventListener('storage',event=>{
       if(draftKey&&(event.key===draftKey||event.key===null)){cacheConflict=true;$('draftStatus').textContent='Order changed in another tab. Reload to use the latest saved order.'}
