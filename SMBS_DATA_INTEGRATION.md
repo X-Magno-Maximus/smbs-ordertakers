@@ -7,7 +7,7 @@
 
 ## 1. Purpose
 
-The `smbs-ordertakers` application is the staff-facing order-entry interface. It must receive its authorized business data from the main `smbs` application and return completed sales to the same controlled business system.
+The `smbs-ordertakers` application is the staff-facing order-entry interface. It must receive its authorized business data from the main `smbs` application and submit order requests to the same controlled business system. The backend creates sales only through the controlled recognition event.
 
 The main `smbs` system is the authoritative source of truth for:
 
@@ -33,10 +33,12 @@ The order-taker must not maintain an independent permanent copy of these records
 | Inventory quantity and availability | `smbs` | Read | `smbs` → order-taker |
 | Customer/client profile | `smbs` | Authorized read/create/update | Bidirectional through API |
 | Staff identity and RBAC permissions | `smbs` | Read after authentication | `smbs` → order-taker |
-| Order draft | Order-taker session | Create/update until submission | Local draft only |
-| Submitted order and sale | `smbs` | Create | order-taker → `smbs` |
+| Unsent local draft | Order-taker session | Edit temporary working copy | Local only until explicitly saved |
+| Centrally saved draft | `smbs` backend | Authorized create/read/update with version checks | Bidirectional through API; recoverable across authorized devices |
+| Submitted order | `smbs` backend | Request creation | order-taker → validated backend acceptance |
+| Recognized sale | `smbs` backend | Authorized read; no direct creation | Controlled recognition event → sales/accounting |
 | Inventory reduction | `smbs` backend | No direct client write | Atomic server transaction |
-| Audit events | `smbs` audit service | Create | order-taker → `smbs` |
+| Audit events | `smbs` audit service | Submit allowlisted UI telemetry; no direct audit write | Backend validates reports and writes provenance-labeled records |
 
 ## 3. Required Context Parameters
 
@@ -109,20 +111,26 @@ Customer search responses should be minimal and tenant-scoped. Sensitive notes, 
 
 An order submission must contain:
 
-- `orderId` or server request reference
+- Optional existing draft `orderId` and version, validated against authorized scope; the server assigns new canonical order IDs
 - `tenantId`, `businessId`, and `locationId`
-- Authenticated `staffUserId` and `sessionId`
+- Authentication credentials through the configured transport; the server derives `staffUserId` and `sessionId`, never trusts payload identity
 - Optional authorized `customerId` or validated new-customer data
 - Line items containing `productId`, quantity, displayed unit price, tax reference, and product version
 - `currency`
 - `correlationId`
 - `idempotencyKey`
-- Client timestamp and authoritative server timestamp
+- Informational client timestamp
 - Order source: `staff-order-taker`
+
+Server-generated response and stored state fields (not writable submission fields):
+
+- Authoritative server timestamp and canonical order ID
 - Separate order status: draft, submitted, accepted, rejected, cancelled
 - Separate payment status: unpaid, pending, partially_paid, paid, partially_refunded, refunded
 - Separate fulfillment status: unfulfilled, partially_shipped, shipped, delivered
 - Separate recognition status: unrecognized, partially_recognized, recognized, reversed
+
+Reject client-supplied lifecycle status fields and authoritative timestamps. The server initializes payment as unpaid, fulfillment as unfulfilled and recognition as unrecognized, and advances order state only through validated operations. Later transitions require the corresponding trusted event and permission; resubmission cannot reset existing state.
 
 The client may display calculated totals, but the server must recalculate prices, discounts, taxes, stock availability, and final totals before accepting the order.
 
@@ -183,11 +191,14 @@ Implementation names may change, but equivalent controlled operations are requir
 | `GET` | `/customers?query=...` | `customers.read` |
 | `POST` | `/customers` | `customers.create` |
 | `PATCH` | `/customers/{customerId}` | `customers.update` |
+| `POST` | `/order-drafts` | Tenant/location-scoped `orders.create` |
+| `GET` / `PATCH` | `/order-drafts/{draftId}` | Scoped `orders.read` / `orders.create`; updates require current version |
 | `POST` | `/orders` | `orders.create` |
 | `GET` | `/orders/{orderId}` | Tenant-scoped `orders.read` |
 | `POST` | `/orders/{orderId}/cancel` | `orders.cancel` or approval role |
 | `POST` | `/orders/{orderId}/cash-receipts` | Authorized cash recording |
 | Service event | Verified payment notification | Trusted payment integration |
+| `POST` | `/staff/ui-events` | Authenticated active staff; tenant/location validation and allowlisted UI events |
 | Service event | Durable audit/outbox record | Trusted backend only |
 
 ## 9. Synchronization and Refresh Rules
@@ -236,6 +247,8 @@ Record at least:
 - Permission denial and suspicious repeated attempts
 - Administrative changes to staff roles or access
 
+Backend operations emit authoritative audit events directly. Browser-only product additions/removals, order reviews, location selection and lock/logout observations are reported through `/staff/ui-events`. The endpoint validates active membership, event type, affected-record scope, payload size and safe metadata; rate-limits requests and deduplicates event IDs. It derives actor/session and receipt time server-side and labels records `client-reported`, retaining the client timestamp as informational. Reports cannot assert successful payments, acceptance, recognition or access grants. Browser reports are observations, not proof of business completion; missing reports must not be presented as complete coverage. Identity-service events supply authoritative login failures and session expiry.
+
 Each audit record should include `eventId`, `eventType`, `tenantId`, `locationId`, `staffUserId`, `sessionId`, `correlationId`, server timestamp, outcome, affected record IDs, and safe metadata. Passwords, authorization codes, full payment data, and unnecessary customer PII must never be logged.
 
 ## 12. Failure and Conflict Handling
@@ -280,7 +293,7 @@ Integration is ready only when:
 - Duplicate submissions cannot create duplicate sales.
 - Price and stock conflicts are clearly handled.
 - Staff authentication and authorization are server-enforced.
-- Every material action creates an audit event.
+- Every material backend action creates a durable authoritative audit event; required browser-only actions use the validated reporting path and are labeled client-reported. Verify delivery/retry deduplication and report coverage gaps.
 - No production secret or sensitive PII exists in the public repository.
 - Mobile, tablet, laptop, desktop, and 100%–250% browser zoom remain supported.
 - Automated integration, authorization, transaction, accessibility, and responsive-layout tests pass.
