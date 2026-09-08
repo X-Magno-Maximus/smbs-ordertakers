@@ -1,6 +1,7 @@
 # SMB Order-Taker Data Integration Specification
 
-**Status:** Architecture and integration contract  
+**Status:** Proposed integration contract — backend connection not yet verified
+**Revision:** September 8, 2026  
 **Source application:** [X-Magno-Maximus/smbs](https://github.com/X-Magno-Maximus/smbs)  
 **Staff order application:** [X-Magno-Maximus/smbs-ordertakers](https://github.com/X-Magno-Maximus/smbs-ordertakers)
 
@@ -118,28 +119,57 @@ An order submission must contain:
 - `idempotencyKey`
 - Client timestamp and authoritative server timestamp
 - Order source: `staff-order-taker`
-- Status: `draft`, `submitted`, `accepted`, `rejected`, `cancelled`, or `refunded`
+- Separate order status: draft, submitted, accepted, rejected, cancelled
+- Separate payment status: unpaid, pending, partially_paid, paid, partially_refunded, refunded
+- Separate fulfillment status: unfulfilled, partially_shipped, shipped, delivered
+- Separate recognition status: unrecognized, partially_recognized, recognized, reversed
 
 The client may display calculated totals, but the server must recalculate prices, discounts, taxes, stock availability, and final totals before accepting the order.
 
-## 7. Controlled Order Transaction
+## 7. Independent Business Events
 
-A submitted order must be processed as one server-controlled transaction:
+Order acceptance, stock reservation, payment, shipment and sale recognition are separate events.
 
-1. Authenticate the staff session.
-2. Confirm tenant, business, location, and RBAC scope.
-3. Validate the idempotency key.
-4. Reload current products, prices, tax rules, and inventory.
-5. Reject inactive products, price mismatches, and insufficient stock.
-6. Calculate the authoritative subtotal, tax, discounts, and total.
-7. Create the order and sale records.
-8. Reduce or reserve inventory for every accepted line.
-9. Create inventory movement records.
-10. Update sales/accounting summaries.
-11. Record the complete audit event.
-12. Return the accepted order, updated inventory values, and receipt reference.
+| Event | Controlled result | Dashboard effect |
+|---|---|---|
+| Draft saved | Central versioned draft with staff, branch and customer reference | Pending work only |
+| Order accepted | Validate identity, membership, permission, price, tax and stock; save order and reserve stock atomically | Awaiting-action orders; available stock |
+| Payment confirmed | Verify electronic payment through the payment service, or authorized cash recording | Payment record and outstanding invoice balance |
+| Shipment recorded | Consume the applicable reservation and record physical stock movement exactly once | Fulfillment progress and on-hand stock |
+| Sale recognized | Apply business-approved recognition and costing rules | Net sales and gross profit |
+| Cancellation/return | Release unused reservations; record received returns and refunds separately | Appropriate stock and financial reversals |
 
-Order creation and inventory reduction must succeed or fail together. A partially completed sale is not permitted.
+### Order acceptance transaction
+
+1. Validate authenticated staff session and active owner-approved tenant/location membership.
+2. Check permission and idempotency key.
+3. Reload product versions, prices, tax rules and inventory.
+4. Reject invalid quantities, inactive products, stale prices and insufficient available stock.
+5. Recalculate authoritative totals.
+6. Commit accepted order, stock reservations and durable audit/outbox event together.
+7. Return canonical order ID, version and reservation result.
+
+Available-to-sell equals on-hand minus active reservations. A reservation does not itself reduce physical on-hand quantity or inventory valuation. Define reservation expiry and release policy before live use.
+
+Payment verification and external notifications cannot be atomic with a local database transaction. Use idempotent event handlers and retryable delivery. Dashboard summaries consume durable events and must not count replayed events twice.
+
+### Payment and recognition rules
+
+- Electronic payment requires a verified provider event matching order, amount and currency. A browser callback or Paid click is insufficient.
+- Cash recording requires its own permission and captures actor, amount and receipt reference.
+- An invoice and its payment may describe the same sale; they must not be counted as separate revenue.
+- Recognition timing and costing rules require business sign-off before financial cards use live data.
+- Partial payments retain the remaining balance. Refund and cancellation are separate operations.
+
+### Pending-order workflow
+
+Preserve order numbers and human references, such as Order 330 / Reference 5. The reference is not the unique order ID.
+
+Submitted pending orders live centrally. Device cache is a temporary working copy scoped to tenant, branch and staff. Remove an order from the device's unpaid list only after the backend confirms the saved settlement state. Retain its order, invoice, payment and audit history centrally.
+
+If payment status is uncertain, show pending verification and permit a safe retry. Another authorized device must recover the same unpaid list.
+
+The current Paid button records local staff confirmation and clears the local pending entry. Replace this behavior before live payment use.
 
 ## 8. Suggested Service Operations
 
@@ -156,7 +186,9 @@ Implementation names may change, but equivalent controlled operations are requir
 | `POST` | `/orders` | `orders.create` |
 | `GET` | `/orders/{orderId}` | Tenant-scoped `orders.read` |
 | `POST` | `/orders/{orderId}/cancel` | `orders.cancel` or approval role |
-| `POST` | `/audit/events` | Trusted service or controlled client endpoint |
+| `POST` | `/orders/{orderId}/cash-receipts` | Authorized cash recording |
+| Service event | Verified payment notification | Trusted payment integration |
+| Service event | Durable audit/outbox record | Trusted backend only |
 
 ## 9. Synchronization and Refresh Rules
 
@@ -244,7 +276,7 @@ Integration is ready only when:
 - Products, images, prices, and stock shown by the order-taker come from the authorized `smbs` data service.
 - Customer access is tenant-scoped, minimal, and RBAC-controlled.
 - The server recalculates every submitted order.
-- Order creation and inventory reduction are atomic.
+- Order acceptance and stock reservation are atomic; later stock movements and payments are separately idempotent.
 - Duplicate submissions cannot create duplicate sales.
 - Price and stock conflicts are clearly handled.
 - Staff authentication and authorization are server-enforced.
@@ -260,7 +292,11 @@ Integration is ready only when:
 3. Implement tenant/location-scoped catalog reads.
 4. Replace the hard-coded demo products with catalog service responses.
 5. Implement controlled customer search/create/update.
-6. Implement atomic order, sale, inventory, accounting, and audit processing.
+6. Implement acceptance/reservations, then independent payment, fulfillment, recognition and durable audit events.
 7. Add realtime or version-based synchronization.
 8. Test security, tenant isolation, conflicts, responsive behavior, and accessibility.
 9. Complete penetration testing and owner approval before production use.
+
+## 16. First Milestone
+
+See [FIRST_CATALOG_MILESTONE.md](FIRST_CATALOG_MILESTONE.md). Connect one authenticated employee to one authorized branch catalog before enabling submissions. Sample staff records are not authenticated accounts.
