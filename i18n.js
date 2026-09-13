@@ -32,7 +32,7 @@
     if (match) return t("Remove {{name}}", { name: match[1] });
     match = value.match(/^Unlock VAT \((.+)%\)$/);
     if (match) return t("Unlock VAT ({{rate}}%)", { rate: match[1] });
-    return value.replace(/\\bReference\\b/g, "Referencia").replace(/\\bnot entered\\b/g, "sin ingresar").replace(/ marked paid and removed\. Other pending orders retained\.$/, " marcado como pagado y eliminado. Los demás pedidos pendientes se conservaron.");
+    return value.replace(/\bReference\b/g, "Referencia").replace(/\bnot entered\b/g, "sin ingresar").replace(/ marked paid and removed\. Other pending orders retained\.$/, " marcado como pagado y eliminado. Los demás pedidos pendientes se conservaron.");
   }
   function localize(root = document) {
     document.documentElement.lang = language;
