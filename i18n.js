@@ -84,6 +84,10 @@
       }));
     }).observe(document.body, { childList: true, subtree: true });
   }
+  document.addEventListener("click", event => {
+   const button = event.target.closest("[data-language]");
+    if (button) setLanguage(button.dataset.language);
+  });
   window.MarxiaI18n = { get language() { return language; }, t, localize, setLanguage };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => { localize(); observe(); }, { once: true });
