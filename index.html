@@ -379,5 +379,6 @@
     $('orderNumber').textContent=`Order #${String(Date.now()).slice(-6)}`;
     const active=sessionStorage.getItem('marxiaStaffSession');if(active){try{const s=JSON.parse(active);$('staffIdentity').textContent=s.email;restoreDraft(s.email);$('authView').classList.add('hidden');$('appView').classList.remove('hidden');renderProduct();renderCart()}catch{sessionStorage.removeItem('marxiaStaffSession')}}
   </script>
+  <script src="i18n.js"></script>
 </body>
 </html>
