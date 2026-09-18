@@ -138,6 +138,12 @@
         <label title="Place controls on the left"><input type="radio" name="handPreference" value="left">Left-handed</label>
         <label title="Place controls on the right"><input type="radio" name="handPreference" value="right" checked>Right-handed</label>
       </div></fieldset>
+      <hr>
+      <div class="menu-contact" role="group" aria-label="Language">
+        <strong>Language</strong>
+        <button id="languageEnglish" type="button" aria-label="Select English">English</button>
+        <button id="languageSpanish" type="button" aria-label="Select Spanish">Spanish</button>
+      </div>
       <button id="lockSession" type="button">Lock staff session</button>
     </nav>
         <div class="visual" id="swipeArea">
@@ -193,6 +199,7 @@
   <dialog id="reviewDialog"><div class="modal" id="reviewContent"></div></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <script src="i18n.js?v=20260918-parity-1"></script>
   <script>
     'use strict';
     const products=[
@@ -203,14 +210,14 @@
       {id:'milk',name:'Fresh Milk',category:'milk',label:'Milk',price:2.9,stock:10,image:'assets/products/fresh-milk.webp'}
     ];
     const state={index:0,filter:'all',cart:new Map(),contact:{email:'',whatsapp:''}};
-    const $=id=>document.getElementById(id); const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
+    const $=id=>document.getElementById(id); const tr=value=>window.MarxiaI18n.t(value); const money=n=>new Intl.NumberFormat(window.MarxiaI18n.language==='es'?'es-EC':'en-US',{style:'currency',currency:'USD'}).format(n);
     const art=p=>`<img src="${p.image}" alt="${p.name}" loading="eager">`;
     function visible(){return state.filter==='all'?products:products.filter(p=>p.category===state.filter)}
     function current(){const list=visible();return list[state.index%list.length]}
-    function renderProduct(direction=0){const p=current(),el=$('productArt');if(direction){el.style.transform=`translateX(${direction*24}px)`;el.style.opacity='.3';setTimeout(()=>{el.style.transform='';el.style.opacity='1'},120)}$('categoryLabel').textContent=p.label;$('productName').textContent=p.name;$('productPrice').textContent=money(p.price);$('productStock').textContent=`${p.stock-(state.cart.get(p.id)||0)} available`;$('quantity').textContent=state.cart.get(p.id)||0;$('increase').disabled=(state.cart.get(p.id)||0)>=p.stock;$('increase').setAttribute('aria-label',`Add one ${p.name}`);$('decrease').setAttribute('aria-label',`Remove one ${p.name}`);el.innerHTML=art(p);renderThumbs()}
-    function renderThumbs(){const list=visible();$('thumbs').innerHTML=list.map((p,i)=>`<button class="thumb ${i===state.index?'active':''}" data-index="${i}" type="button" aria-label="Select ${p.name}">${art(p)}<span>${p.name}</span></button>`).join('');const active=document.querySelector('.thumb.active');if(active)$('thumbs').scrollTo({left:active.offsetLeft-$('thumbs').offsetLeft-($('thumbs').clientWidth-active.clientWidth)/2,behavior:'smooth'})}
+    function renderProduct(direction=0){const p=current(),el=$('productArt');if(direction){el.style.transform=`translateX(${direction*24}px)`;el.style.opacity='.3';setTimeout(()=>{el.style.transform='';el.style.opacity='1'},120)}$('categoryLabel').textContent=p.label;$('productName').textContent=p.name;$('productPrice').textContent=money(p.price);$('productStock').textContent=`${p.stock-(state.cart.get(p.id)||0)} available`;$('quantity').textContent=state.cart.get(p.id)||0;$('increase').disabled=(state.cart.get(p.id)||0)>=p.stock;$('increase').setAttribute('aria-label',tr(`Add one ${p.name}`));$('decrease').setAttribute('aria-label',tr(`Remove one ${p.name}`));el.innerHTML=art(p);renderThumbs()}
+    function renderThumbs(){const list=visible();$('thumbs').innerHTML=list.map((p,i)=>`<button class="thumb ${i===state.index?'active':''}" data-index="${i}" type="button" aria-label="${tr(`Select ${p.name}`)}">${art(p)}<span>${p.name}</span></button>`).join('');const active=document.querySelector('.thumb.active');if(active)$('thumbs').scrollTo({left:active.offsetLeft-$('thumbs').offsetLeft-($('thumbs').clientWidth-active.clientWidth)/2,behavior:'smooth'})}
     function changeQty(delta){const p=current(),qty=Math.max(0,Math.min(p.stock,(state.cart.get(p.id)||0)+delta));qty?state.cart.set(p.id,qty):state.cart.delete(p.id);renderProduct();renderCart()}
-    function renderCart(){const items=[...state.cart].map(([id,qty])=>({p:products.find(x=>x.id===id),qty}));$('orderLines').innerHTML=items.length?items.map(({p,qty})=>`<div class="line-item"><img src="${p.image}" alt=""><div><strong>${p.name}</strong><small>${qty} × ${money(p.price)}</small></div><div><strong>${money(qty*p.price)}</strong><button data-remove="${p.id}" aria-label="Remove ${p.name}">Remove</button></div></div>`).join(''):'<p class="empty">Use + to add a product.</p>';const total=items.reduce((sum,{p,qty})=>sum+p.price*qty,0);$('orderTotal').textContent=money(orderAmounts().total/100);$('orderSubtotal').textContent=money(orderAmounts().subtotal/100);$('orderVat').textContent=money(orderAmounts().vat/100);$('paidOrder').disabled=!items.length;$('reviewOrder').disabled=!items.length;const count=items.reduce((n,item)=>n+item.qty,0);$('orderCount').textContent=count;$('orderToggle').setAttribute('aria-label',`Open current order, ${count} items`);saveDraft()}
+    function renderCart(){const items=[...state.cart].map(([id,qty])=>({p:products.find(x=>x.id===id),qty}));$('orderLines').innerHTML=items.length?items.map(({p,qty})=>`<div class="line-item"><img src="${p.image}" alt=""><div><strong>${p.name}</strong><small>${qty} × ${money(p.price)}</small></div><div><strong>${money(qty*p.price)}</strong><button data-remove="${p.id}" aria-label="${tr(`Remove ${p.name}`)}">Remove</button></div></div>`).join(''):'<p class="empty">Use + to add a product.</p>';const total=items.reduce((sum,{p,qty})=>sum+p.price*qty,0);$('orderTotal').textContent=money(orderAmounts().total/100);$('orderSubtotal').textContent=money(orderAmounts().subtotal/100);$('orderVat').textContent=money(orderAmounts().vat/100);$('paidOrder').disabled=!items.length;$('reviewOrder').disabled=!items.length;const count=items.reduce((n,item)=>n+item.qty,0);$('orderCount').textContent=count;$('orderToggle').setAttribute('aria-label',tr(`Open current order, ${count} items`));saveDraft()}
     $('orderToggle').addEventListener('click',()=>{$('mainMenu').classList.remove('open');$('menuButton').setAttribute('aria-expanded','false');$('orderDialog').showModal();$('orderToggle').setAttribute('aria-expanded','true')});
     $('closeOrder').addEventListener('click',()=>$('orderDialog').close());
     $('orderDialog').addEventListener('close',()=>{$('orderToggle').setAttribute('aria-expanded','false');$('orderToggle').focus({preventScroll:true})});
@@ -375,10 +382,12 @@
     window.addEventListener('storage',event=>{if(event.key===handPreferenceKey||event.key===null)restoreHandPreference()});
     restoreHandPreference();
 
+    const changeLanguage=locale=>{window.MarxiaI18n.setLanguage(locale);renderProduct();renderCart();renderPending();};
+    $('languageEnglish').addEventListener('click',()=>changeLanguage('en'));
+    $('languageSpanish').addEventListener('click',()=>changeLanguage('es'));
     $('lockSession').addEventListener('click',()=>{sessionStorage.removeItem('marxiaStaffSession');location.reload()});
     $('orderNumber').textContent=`Order #${String(Date.now()).slice(-6)}`;
     const active=sessionStorage.getItem('marxiaStaffSession');if(active){try{const s=JSON.parse(active);$('staffIdentity').textContent=s.email;restoreDraft(s.email);$('authView').classList.add('hidden');$('appView').classList.remove('hidden');renderProduct();renderCart()}catch{sessionStorage.removeItem('marxiaStaffSession')}}
   </script>
-  <script src="i18n.js"></script>
 </body>
 </html>
