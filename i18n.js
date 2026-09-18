@@ -67,10 +67,62 @@
   "Log out": "Cerrar sesión",
   "Menu": "Menú",
   "Close": "Cerrar",
-  "Search products": "Buscar productos"
+  "Search products": "Buscar productos",
+  "SMBs Staff Orders": "Pedidos del personal de negocios",
+  "SMB Order Station": "Estación de pedidos del negocio",
+  "Marxia · Staff access": "Marxia · Acceso del personal",
+  "Authorized staff only.": "Solo personal autorizado.",
+  "Access requires active consent from the SMB owner and verified staff authentication.": "El acceso requiere el consentimiento activo del propietario del negocio y la autenticación verificada del personal.",
+  "I confirm I am authorized by this SMB owner to create orders and handle customer contact details.": "Confirmo que el propietario de este negocio me autorizó para crear pedidos y gestionar los datos de contacto de los clientes.",
+  "Verify and open order station": "Verificar y abrir la estación de pedidos",
+  "Deny-by-default access · Session and order actions prepared for audit logging": "Acceso denegado de forma predeterminada · Las acciones de sesión y pedidos están preparadas para el registro de auditoría",
+  "Owner-issued code": "Código emitido por el propietario",
+  "Lock staff session": "Bloquear sesión del personal",
+  "Product selection": "Selección de productos",
+  "Order menu": "Menú de pedidos",
+  "Order": "Pedido",
+  "Soft drink": "Bebida gaseosa",
+  "Sparkling Cola": "Cola con gas",
+  "Orange Soda": "Gaseosa de naranja",
+  "Café Latte": "Café latte",
+  "Double Espresso": "Espresso doble",
+  "Fresh Milk": "Leche fresca",
+  "available": "disponibles",
+  "Swipe left or right": "Desliza a la izquierda o a la derecha",
+  "Quantity controls": "Controles de cantidad",
+  "Place controls on the left": "Colocar los controles a la izquierda",
+  "Place controls on the right": "Colocar los controles a la derecha",
+  "Toggle order menu": "Alternar menú de pedidos",
+  "Open order menu": "Abrir menú de pedidos",
+  "Open current order": "Abrir pedido actual",
+  "Close current order": "Cerrar pedido actual",
+  "Add one": "Agregar uno de",
+  "Remove one": "Quitar uno de",
+  "Select": "Seleccionar",
+  "Other products": "Otros productos",
+  "Authorized staff session": "Sesión de personal autorizado",
+  "Order station active": "Estación de pedidos activa",
+  "Use + to add a product.": "Usa + para agregar un producto.",
+  "Optional": "Opcional",
+  "Consumer WhatsApp": "WhatsApp del consumidor",
+  "Save consumer details": "Guardar datos del consumidor",
+  "Save & New Order": "Guardar e iniciar nuevo pedido",
+  "Saved unpaid orders": "Pedidos pendientes guardados",
+  "Paid records staff confirmation on this device; it does not charge a payment method.": "Pagado registra la confirmación del personal en este dispositivo; no realiza cargos a ningún método de pago.",
+  "Review current order": "Revisar pedido actual",
+  "Remove": "Quitar",
+  "items": "artículos",
+  "item": "artículo",
+  "Select English": "Seleccionar inglés",
+  "Select Spanish": "Seleccionar español",
+  "English": "Inglés",
+  "Spanish": "Español",
+  "Language": "Idioma",
+  "Current language": "Idioma actual"
 };
   const reverse = Object.fromEntries(Object.entries(pairs).map(([en, es]) => [es, en]));
-  let language = localStorage.getItem(STORAGE_KEY) === "es" ? "es" : "en";
+  let storedLanguage; try { storedLanguage=localStorage.getItem(STORAGE_KEY); } catch {};
+  let language = storedLanguage === "es" ? "es" : "en";
   const originalText = new WeakMap();
   const originalAttrs = new WeakMap();
   const translateString = (value, locale = language) => {
@@ -104,8 +156,8 @@
       Object.entries(originalAttrs.get(el)).forEach(([name,value]) => el.setAttribute(name, translateString(value)));
     });
   };
-  const localize = (root=document) => { document.documentElement.lang=language; localizeNode(root); document.dispatchEvent(new CustomEvent("marxia:languagechange",{detail:{language}})); };
-  const setLanguage = locale => { if (!["en","es"].includes(locale)) return false; language=locale; localStorage.setItem(STORAGE_KEY,locale); localize(); return true; };
+  const localize = (root=document) => { document.documentElement.lang=language; localizeNode(root); document.title=translateString("SMBs Staff Orders"); document.dispatchEvent(new CustomEvent("marxia:languagechange",{detail:{language}})); };
+  const setLanguage = locale => { if (!["en","es"].includes(locale)) return false; language=locale; try { localStorage.setItem(STORAGE_KEY,locale); } catch {} localize(); return true; };
   const t = text => translateString(text);
   const observer = new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(node => { if(node.nodeType===1) localizeNode(node); else if(node.nodeType===3 && node.parentElement) localizeNode(node.parentElement); })));
   window.MarxiaI18n={get language(){return language;},pairs,t,localize,setLanguage};
